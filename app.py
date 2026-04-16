@@ -2,94 +2,67 @@ import streamlit as st
 import joblib
 import pickle
 import numpy as np
-
 import psycopg2
-# Fetch variables
-USER = "postgres.dyqjvckxitsrgmytbdnw" #os.getenv("user")
-PASSWORD = "Petunia_Bob_Takemichi"# os.getenv("password")
-HOST = "aws-1-us-east-1.pooler.supabase.com" #os.getenv("host")
-PORT = "6543" #os.getenv("port")
-DBNAME = "postgres" #os.getenv("dbname")
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
 
-# Configuración de la página
+# Credenciales
+USER = "postgres.dyqjvckxitsrgmytbdnw"
+PASSWORD = "Petunia_Bob_Takemichi"
+HOST = "aws-1-us-east-1.pooler.supabase.com"
+PORT = "6543"
+DBNAME = "postgres"
+
 st.set_page_config(page_title="Predictor de Iris", page_icon="🌸")
-# Connect to the database
-try:
-    connection = psycopg2.connect(
-        user=USER,
-        password=PASSWORD,
-        host=HOST,
-        port=PORT,
-        dbname=DBNAME
-    )
-    print("Connection successful!")
-    
-    # Create a cursor to execute SQL queries
-    cursor = connection.cursor()
-    
-    # Example query
-    cursor.execute("SELECT NOW();")
-    result = cursor.fetchone()
-    print("Current Time:", result)
-    # Close the cursor and connection
-    cursor.close()
-    connection.close()
-    print("Connection closed.")
+st.title("🌸 Predictor de Especies de Iris")
 
-except Exception as e:
-    st.write(str(e))
-
-
-
-# Función para cargar los modelos
 @st.cache_resource
 def load_models():
     try:
-        model = joblib.load('components/iris_model.pkl')
-        scaler = joblib.load('components/iris_scaler.pkl')
-        with open('components/model_info.pkl', 'rb') as f:
-            model_info = pickle.load(f)
-        return model, scaler, model_info
-    except FileNotFoundError:
-        st.error("No se encontraron los archivos del modelo en la carpeta 'models/'")
+        # Conectar a Supabase
+        conn = psycopg2.connect(
+            user=USER, password=PASSWORD,
+            host=HOST, port=PORT, dbname=DBNAME
+        )
+        # Leer datos
+        df = pd.read_sql("SELECT * FROM iris_data", conn)
+        conn.close()
+
+        # Entrenar modelo con los datos de Supabase
+        X = df[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']]
+        y = df['species']
+
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        model = RandomForestClassifier(n_estimators=100, random_state=42)
+        model.fit(X_scaled, y)
+
+        target_names = y.unique()
+        return model, scaler, target_names
+
+    except Exception as e:
+        st.error(f"Error: {e}")
         return None, None, None
 
-# Título
-st.title("🌸 Predictor de Especies de Iris")
-
-# Cargar modelos
-model, scaler, model_info = load_models()
+model, scaler, target_names = load_models()
 
 if model is not None:
-    # Inputs
     st.header("Ingresa las características de la flor:")
-    st.write(result)
-    
     sepal_length = st.number_input("Longitud del Sépalo (cm)", min_value=0.0, max_value=10.0, value=5.0, step=0.1)
-    sepal_width = st.number_input("Ancho del Sépalo (cm)", min_value=0.0, max_value=10.0, value=3.0, step=0.1)
+    sepal_width  = st.number_input("Ancho del Sépalo (cm)",    min_value=0.0, max_value=10.0, value=3.0, step=0.1)
     petal_length = st.number_input("Longitud del Pétalo (cm)", min_value=0.0, max_value=10.0, value=4.0, step=0.1)
-    petal_width = st.number_input("Ancho del Pétalo (cm)", min_value=0.0, max_value=10.0, value=1.0, step=0.1)
-    
-    # Botón de predicción
+    petal_width  = st.number_input("Ancho del Pétalo (cm)",    min_value=0.0, max_value=10.0, value=1.0, step=0.1)
+
     if st.button("Predecir Especie"):
-        # Preparar datos
         features = np.array([[sepal_length, sepal_width, petal_length, petal_width]])
-        
-        # Estandarizar
         features_scaled = scaler.transform(features)
-        
-        # Predecir
         prediction = model.predict(features_scaled)[0]
         probabilities = model.predict_proba(features_scaled)[0]
-        
-        # Mostrar resultado
-        target_names = model_info['target_names']
-        predicted_species = target_names[prediction]
-        
-        st.success(f"Especie predicha: **{predicted_species}**")
+
+        st.success(f"Especie predicha: **{prediction}**")
         st.write(f"Confianza: **{max(probabilities):.1%}**")
-        
-        # Mostrar todas las probabilidades
         st.write("Probabilidades:")
-        for species, prob in zip(target_names, probabilities):
+        for species, prob in zip(model.classes_, probabilities):
             st.write(f"- {species}: {prob:.1%}")
