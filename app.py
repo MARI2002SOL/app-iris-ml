@@ -26,7 +26,7 @@ def load_models():
             host=HOST, port=PORT, dbname=DBNAME
         )
         # Leer datos
-        df = pd.read_sql("SELECT * FROM iris_data", conn)
+        df = pd.read_sql("SELECT * FROM tb_iris", conn)
         conn.close()
 
         # Entrenar modelo con los datos de Supabase
