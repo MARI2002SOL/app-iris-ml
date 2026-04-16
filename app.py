@@ -30,8 +30,8 @@ def load_models():
         conn.close()
 
         # Entrenar modelo con los datos de Supabase
-        X = df[['sepal_length', 'sepal_width', 'petal_length', 'petal_width']]
-        y = df['species']
+        X = df[['l_s', 'a_s', 'l_p', 'a_p']]
+        y = df['prediccion']
 
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
